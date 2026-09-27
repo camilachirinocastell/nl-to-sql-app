@@ -6,11 +6,14 @@ schema (pulled from db.SCHEMA, the single source of truth) plus a few
 worked examples, so a small general-purpose model has enough context to
 produce valid SQL for this specific table.
 """
+import logging
 import os
 import re
 import sqlite3
 import httpx
 from app.db import SCHEMA, TABLE_NAME, execute_query
+
+logger = logging.getLogger(__name__)
 
 # --- Prompt construction -----------------------------------------------
 
@@ -98,7 +101,7 @@ def _extract_sql(raw_response: str) -> str:
     return text.strip()
 
 
-def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> str:
+async def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> str:
     """
     Sends the prompt to the local Ollama API and returns a cleaned-up
     SQL string. Raises OllamaError if the service is unreachable or
@@ -106,12 +109,12 @@ def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> str:
     reporting it through /health-style error responses).
     """
     try:
-        response = httpx.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=timeout,
-        )
-        response.raise_for_status()
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{OLLAMA_HOST}/api/generate",
+                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            )
+            response.raise_for_status()
     except httpx.HTTPError as exc:
         raise OllamaError(f"Failed to reach Ollama at '{OLLAMA_HOST}': {exc}")
 
@@ -200,12 +203,13 @@ def _build_retry_prompt(original_prompt: str, failed_sql: str, error: str) -> st
     )
 
 
-def ask_database(question: str) -> dict:
+async def ask_database(question: str) -> dict:
     """
     Runs the full text-to-SQL flow for one question: build prompt, call
     the model, validate, execute — retrying with the real error as
     feedback if any step fails. Returns the same shape as
-    db.execute_query(): {"columns": [...], "rows": [...], "sql": "..."}.
+    db.execute_query() plus the attempt count: {"columns": [...],
+    "rows": [...], "sql": "...", "attempts": N}.
     """
     prompt = build_prompt(question)
     last_error = None
@@ -213,21 +217,25 @@ def ask_database(question: str) -> dict:
     for attempt in range(1, MAX_RETRIES + 1):
         raw_sql = None
         try:
-            raw_sql = generate_sql(prompt)
+            raw_sql = await generate_sql(prompt)
             safe_sql = validate_sql(raw_sql)
             result = execute_query(safe_sql)
             result["sql"] = safe_sql
+            result["attempts"] = attempt
             return result
         except OllamaError as exc:
             last_error = str(exc)
             failed_sql = "(the model did not return a query)"
+            logger.warning("Attempt %d failed (Ollama error): %s", attempt, last_error)
         except SQLValidationError as exc:
             last_error = str(exc)
             failed_sql = raw_sql
+            logger.warning("Attempt %d failed (invalid SQL: %r): %s", attempt, raw_sql, last_error)
         except sqlite3.OperationalError as exc:
             # Real SQLite errors (e.g. "no such column") also feed the retry.
             last_error = str(exc)
             failed_sql = raw_sql
+            logger.warning("Attempt %d failed (execution error: %r): %s", attempt, raw_sql, last_error)
 
         if attempt < MAX_RETRIES:
             prompt = _build_retry_prompt(prompt, failed_sql, last_error)

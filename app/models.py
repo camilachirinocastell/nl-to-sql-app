@@ -13,3 +13,14 @@ from pydantic import BaseModel
 class HealthResponse(BaseModel):
     status: str
     database_connected: bool
+
+class AskRequest(BaseModel):
+    question: str
+
+
+class AskResponse(BaseModel):
+    question: str
+    sql: str
+    columns: list[str]
+    rows: list[list]
+    attempts: int
