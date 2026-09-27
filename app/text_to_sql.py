@@ -98,7 +98,7 @@ def _extract_sql(raw_response: str) -> str:
     return text.strip()
 
 
-def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> str:
+async def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> str:
     """
     Sends the prompt to the local Ollama API and returns a cleaned-up
     SQL string. Raises OllamaError if the service is unreachable or
@@ -106,12 +106,12 @@ def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> str:
     reporting it through /health-style error responses).
     """
     try:
-        response = httpx.post(
-            f"{OLLAMA_HOST}/api/generate",
-            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-            timeout=timeout,
-        )
-        response.raise_for_status()
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{OLLAMA_HOST}/api/generate",
+                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+            )
+            response.raise_for_status()
     except httpx.HTTPError as exc:
         raise OllamaError(f"Failed to reach Ollama at '{OLLAMA_HOST}': {exc}")
 
@@ -200,7 +200,7 @@ def _build_retry_prompt(original_prompt: str, failed_sql: str, error: str) -> st
     )
 
 
-def ask_database(question: str) -> dict:
+async def ask_database(question: str) -> dict:
     """
     Runs the full text-to-SQL flow for one question: build prompt, call
     the model, validate, execute — retrying with the real error as
@@ -213,7 +213,7 @@ def ask_database(question: str) -> dict:
     for attempt in range(1, MAX_RETRIES + 1):
         raw_sql = None
         try:
-            raw_sql = generate_sql(prompt)
+            raw_sql = await generate_sql(prompt)
             safe_sql = validate_sql(raw_sql)
             result = execute_query(safe_sql)
             result["sql"] = safe_sql
