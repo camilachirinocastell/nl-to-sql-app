@@ -6,11 +6,14 @@ schema (pulled from db.SCHEMA, the single source of truth) plus a few
 worked examples, so a small general-purpose model has enough context to
 produce valid SQL for this specific table.
 """
+import logging
 import os
 import re
 import sqlite3
 import httpx
 from app.db import SCHEMA, TABLE_NAME, execute_query
+
+logger = logging.getLogger(__name__)
 
 # --- Prompt construction -----------------------------------------------
 
@@ -223,13 +226,16 @@ async def ask_database(question: str) -> dict:
         except OllamaError as exc:
             last_error = str(exc)
             failed_sql = "(the model did not return a query)"
+            logger.warning("Attempt %d failed (Ollama error): %s", attempt, last_error)
         except SQLValidationError as exc:
             last_error = str(exc)
             failed_sql = raw_sql
+            logger.warning("Attempt %d failed (invalid SQL: %r): %s", attempt, raw_sql, last_error)
         except sqlite3.OperationalError as exc:
             # Real SQLite errors (e.g. "no such column") also feed the retry.
             last_error = str(exc)
             failed_sql = raw_sql
+            logger.warning("Attempt %d failed (execution error: %r): %s", attempt, raw_sql, last_error)
 
         if attempt < MAX_RETRIES:
             prompt = _build_retry_prompt(prompt, failed_sql, last_error)
