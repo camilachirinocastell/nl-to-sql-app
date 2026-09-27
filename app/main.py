@@ -2,22 +2,26 @@
 app/main.py
 
 API entry point: instantiates FastAPI, loads the CSV into SQLite on
-startup, and exposes /health and an internal endpoint for testing raw
-SQL queries while the natural language flow doesn't exist yet.
+startup, and exposes /health, /ask (natural language queries), and an
+internal endpoint for testing raw SQL queries.
 """
 
+import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.db import CSVLoadError, execute_query, health_check, load_csv_to_db
-from app.text_to_sql import OllamaError, build_prompt, generate_sql
-from app.models import HealthResponse
+from app.text_to_sql import OllamaError, TextToSQLError, ask_database, build_prompt, generate_sql
+from app.models import AskRequest, AskResponse, HealthResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+ASK_TIMEOUT_SECONDS = float(os.getenv("ASK_TIMEOUT_SECONDS", "120"))
 
 
 @asynccontextmanager
@@ -71,3 +75,43 @@ def internal_query(request: InternalQueryRequest):
         return execute_query(request.sql)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/ask", response_model=AskResponse)
+async def ask(request: AskRequest):
+    logger.info("Received question: %s", request.question)
+
+    try:
+        result = await asyncio.wait_for(
+            ask_database(request.question),
+            timeout=ASK_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "Question timed out after %.0fs: %s", ASK_TIMEOUT_SECONDS, request.question
+        )
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                f"The request took too long to process (over "
+                f"{ASK_TIMEOUT_SECONDS:.0f}s). Try rephrasing your question."
+            ),
+        )
+    except TextToSQLError as exc:
+        logger.error("Failed to produce SQL for question '%s': %s", request.question, exc)
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    logger.info(
+        "Resolved question in %d attempt(s): %s -> %s",
+        result["attempts"],
+        request.question,
+        result["sql"],
+    )
+
+    return AskResponse(
+        question=request.question,
+        sql=result["sql"],
+        columns=result["columns"],
+        rows=result["rows"],
+        attempts=result["attempts"],
+    )
