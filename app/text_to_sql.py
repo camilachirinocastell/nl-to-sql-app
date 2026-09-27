@@ -205,7 +205,8 @@ async def ask_database(question: str) -> dict:
     Runs the full text-to-SQL flow for one question: build prompt, call
     the model, validate, execute — retrying with the real error as
     feedback if any step fails. Returns the same shape as
-    db.execute_query(): {"columns": [...], "rows": [...], "sql": "..."}.
+    db.execute_query() plus the attempt count: {"columns": [...],
+    "rows": [...], "sql": "...", "attempts": N}.
     """
     prompt = build_prompt(question)
     last_error = None
@@ -217,6 +218,7 @@ async def ask_database(question: str) -> dict:
             safe_sql = validate_sql(raw_sql)
             result = execute_query(safe_sql)
             result["sql"] = safe_sql
+            result["attempts"] = attempt
             return result
         except OllamaError as exc:
             last_error = str(exc)
