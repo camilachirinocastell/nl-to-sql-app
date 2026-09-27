@@ -1,5 +1,5 @@
 """
-models.py
+app/models.py
 
 Modelos Pydantic que definen la forma de los datos que entran y salen
 por la API. En esta fase solo existe el modelo de respuesta de /health;

@@ -1,5 +1,5 @@
 """
-main.py
+app/main.py
 
 Entry point de la API: instancia FastAPI, carga el CSV en SQLite al
 arrancar el servicio, y expone /health y un endpoint interno para

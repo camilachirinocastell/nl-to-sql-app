@@ -1,5 +1,5 @@
 """
-db.py
+app/db.py
 
 Data access layer: SQLite connection, CSV-to-SQLite loading, and raw SQL
 execution. This module knows nothing about HTTP or FastAPI — that lives
