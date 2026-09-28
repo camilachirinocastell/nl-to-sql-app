@@ -1,3 +1,10 @@
+/*
+ * app/static/styles.css
+ *
+ * Visual styles for the single-page UI defined in index.html. Classes are
+ * toggled at runtime by app.js (e.g. body.light-mode, [hidden] sections).
+ */
+
 /* ================================
    1. DESIGN TOKENS
    ================================

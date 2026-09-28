@@ -1,3 +1,10 @@
+<!--
+  app/static/index.html
+
+  Single-page UI: question form, plus panels for the generated SQL, the
+  results table, loading state and errors (hidden until app.js populates
+  and shows them). Served by the StaticFiles mount in app/main.py.
+-->
 <!doctype html>
 <html lang="en">
   <head>
@@ -38,9 +45,9 @@
       <section class="intro">
         <h1>Ask your data.</h1>
         <p class="intro-sub">
-          Type a question in plain English. A small language model, hosted
-          locally, turns it into SQL, and the query runs read-only against
-          the dataset.
+          Ask a question, in English or Spanish, about a dataset of MercadoLibre
+          listings (horror books, Argentina). A small language model, hosted
+          locally, translates it into SQL and runs it read-only.
         </p>
         <div class="intro-line" aria-hidden="true"></div>
       </section>
@@ -57,7 +64,7 @@
               name="question"
               autocomplete="off"
               maxlength="500"
-              placeholder="e.g. What are the 3 cheapest products?"
+              placeholder="e.g. What are the 3 cheapest books?"
               required
             />
             <button id="submit-btn" class="btn-primary" type="submit">
@@ -80,7 +87,12 @@
       </section>
 
       <!-- Transparency: the SQL the model generated -->
-      <section id="sql-section" class="panel" aria-labelledby="sql-heading" hidden>
+      <section
+        id="sql-section"
+        class="panel"
+        aria-labelledby="sql-heading"
+        hidden
+      >
         <div class="panel-head">
           <h2 id="sql-heading" class="panel-title">Generated SQL</h2>
           <span id="attempts" class="meta"></span>
