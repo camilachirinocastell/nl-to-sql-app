@@ -3,7 +3,7 @@
  *
  * Frontend logic for the single-page UI: theme toggle (persisted in
  * localStorage), the call to POST /ask, and rendering the response (SQL,
- * attempt count, results table). Showing readable errors is step 7.
+ * attempt count, results table, and readable errors).
  */
 
 const THEME_KEY = "theme";
@@ -21,6 +21,9 @@ const rowCountEl = document.getElementById("row-count");
 const resultsTable = document.getElementById("results-table");
 const resultsHead = resultsTable.querySelector("thead");
 const resultsBody = resultsTable.querySelector("tbody");
+const errorBox = document.getElementById("error-box");
+const errorTitle = document.getElementById("error-title");
+const errorDetail = document.getElementById("error-detail");
 
 /** Applies a theme and updates the toggle label (it shows the mode you switch TO). */
 function applyTheme(theme) {
@@ -56,9 +59,9 @@ applyTheme(loadSavedTheme());
 
 /**
  * Shows/hides the loading indicator and disables the form while a request
- * is in flight. Also hides the previous answer's SQL and results panels
- * when a new request starts, so they don't stay on screen next to the
- * "loading" state while the new question is still processing.
+ * is in flight. Also hides the previous answer's SQL, results and error
+ * panels when a new request starts, so they don't stay on screen next to
+ * the "loading" state while the new question is still processing.
  */
 function setLoading(isLoading) {
   submitBtn.disabled = isLoading;
@@ -68,6 +71,7 @@ function setLoading(isLoading) {
     statusText.textContent = "Thinking... this can take up to a minute on the first request.";
     sqlSection.hidden = true;
     resultsSection.hidden = true;
+    hideError();
   }
 }
 
@@ -122,12 +126,41 @@ function showResults(columns, rows) {
   resultsSection.hidden = false;
 }
 
+/** Shows an error message and reveals the panel. */
+function showError(title, detail) {
+  errorTitle.textContent = title;
+  errorDetail.textContent = detail;
+  errorBox.hidden = false;
+}
+
+function hideError() {
+  errorBox.hidden = true;
+}
+
 /**
- * Sends the question to POST /ask and logs the result.
- * Error shape from the backend varies: a string (custom errors, e.g. 422
- * "retries exhausted" or 504 timeout) or a list of objects (FastAPI's own
- * Pydantic validation 422, e.g. empty body). Both are just logged for now;
- * showing them to the user is a later step (7).
+ * Turns a failed /ask response into a title + readable detail.
+ * `detail` from the backend has two possible shapes: a plain string for
+ * our own errors (504 timeout, 422 retries exhausted — both already
+ * written for end users in main.py), or a list of objects for FastAPI's
+ * own Pydantic validation 422 (e.g. malformed body). Only the string
+ * case is safe to show as-is.
+ */
+function describeAskError(status, detail) {
+  if (status === 504) {
+    return { title: "Request timed out", detail };
+  }
+  if (status === 422 && typeof detail === "string") {
+    return { title: "Couldn't answer that question", detail };
+  }
+  return {
+    title: "Something went wrong",
+    detail: "Please rephrase your question and try again.",
+  };
+}
+
+/**
+ * Sends the question to POST /ask, renders the result, and shows a
+ * readable error if the request fails (bad response or network failure).
  */
 async function handleSubmit(event) {
   event.preventDefault();
@@ -148,6 +181,8 @@ async function handleSubmit(event) {
 
     if (!response.ok) {
       console.error("Ask failed:", response.status, data.detail);
+      const { title, detail } = describeAskError(response.status, data.detail);
+      showError(title, detail);
       return;
     }
 
@@ -157,6 +192,10 @@ async function handleSubmit(event) {
   } catch (err) {
     // Network failure: server down, no connection, etc. — not an HTTP error response.
     console.error("Network error calling /ask:", err);
+    showError(
+      "Couldn't connect",
+      "Check that the server is running and try again."
+    );
   } finally {
     setLoading(false);
   }
