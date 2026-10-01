@@ -1,0 +1,152 @@
+<!--
+  app/static/index.html
+
+  Single-page UI: question form, plus panels for the generated SQL, the
+  results table, loading state and errors (hidden until app.js populates
+  and shows them). Served by the StaticFiles mount in app/main.py.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>NL-to-SQL App — Camila Chirino Castell</title>
+    <meta
+      name="description"
+      content="Ask questions about a product dataset in plain English. A locally hosted small language model translates them into SQL."
+    />
+    <!-- Empty favicon: avoids a useless /favicon.ico request (and a 404 in the logs) -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <span class="brand-name">Camila Chirino Castell</span>
+          <span class="brand-role"
+            >IA Solution Developer | Fullstack Developer | AI Engineer</span
+          >
+        </div>
+        <button
+          id="theme-toggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch between dark and light mode"
+        >
+          LIGHT
+        </button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="intro">
+        <h1>Ask your data.</h1>
+        <p class="intro-sub">
+          Ask a question, in English or Spanish, about a dataset of MercadoLibre
+          listings (horror books, Argentina). A small language model, hosted
+          locally, translates it into SQL and runs it read-only.
+        </p>
+        <div class="intro-line" aria-hidden="true"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="ask-heading">
+        <h2 id="ask-heading" class="visually-hidden">Ask a question</h2>
+        <form id="question-form" class="question-form" novalidate>
+          <label for="question-input" class="field-label">Your question</label>
+          <div class="question-row">
+            <input
+              id="question-input"
+              class="question-input"
+              type="text"
+              name="question"
+              autocomplete="off"
+              maxlength="500"
+              placeholder="e.g. What are the 3 cheapest books?"
+              required
+            />
+            <button id="submit-btn" class="btn-primary" type="submit">
+              Ask
+            </button>
+          </div>
+        </form>
+
+        <!-- Loading state: filled and toggled by app.js -->
+        <div id="status" class="status" role="status" aria-live="polite" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="status-text"></span>
+        </div>
+
+        <!-- Error state: filled and toggled by app.js -->
+        <div id="error-box" class="error-box" role="alert" hidden>
+          <p id="error-title" class="error-title"></p>
+          <p id="error-detail" class="error-detail"></p>
+        </div>
+      </section>
+
+      <!-- Transparency: the SQL the model generated -->
+      <section
+        id="sql-section"
+        class="panel"
+        aria-labelledby="sql-heading"
+        hidden
+      >
+        <div class="panel-head">
+          <h2 id="sql-heading" class="panel-title">Generated SQL</h2>
+          <span id="attempts" class="meta"></span>
+        </div>
+        <pre class="sql-block"><code id="sql-output"></code></pre>
+      </section>
+
+      <!-- Query result as a table -->
+      <section
+        id="results-section"
+        class="panel"
+        aria-labelledby="results-heading"
+        hidden
+      >
+        <div class="panel-head">
+          <h2 id="results-heading" class="panel-title">Results</h2>
+          <span id="row-count" class="meta"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="results-table" class="results-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <p class="footer-copy">© 2026 Camila Chirino Castell</p>
+        <nav class="footer-links" aria-label="Author links">
+          <a
+            href="https://camilachirinocastell-portfolio.netlify.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Portfolio</a
+          >
+          <a
+            href="https://github.com/camilachirinocastell"
+            target="_blank"
+            rel="noopener noreferrer"
+            >GitHub</a
+          >
+          <a
+            href="https://www.linkedin.com/in/camila-chirino-castell"
+            target="_blank"
+            rel="noopener noreferrer"
+            >LinkedIn</a
+          >
+          <a href="mailto:camila.chirino.castell@mi.unc.edu.ar">Email</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

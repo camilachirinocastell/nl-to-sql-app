@@ -24,8 +24,8 @@ database. The result is returned to the user.
 
 ## Project status
 
-🚧 In progress — Phase 0 (repo skeleton). See repository branches for
-step-by-step feature development.
+🚧 In progress. See repository branches for feature-by-feature
+development history.
 
 ## Local installation
 
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-_(Full `docker compose up` installation instructions pending — Phase 5.)_
+_(Full `docker compose up` installation instructions pending.)_
 
 ## Environment variables
 
@@ -53,7 +53,13 @@ _(Full `docker compose up` installation instructions pending — Phase 5.)_
 
 ## Run
 
-_(Pending — Phase 3/4.)_
+_(Coming soon — full run instructions, including Docker.)_
+
+## Testing the API
+
+A Postman collection is included to test `/ask`, `/health` and
+`/internal/query` independently from the UI:
+[`postman/nl-to-sql-app.postman_collection.json`](postman/nl-to-sql-app.postman_collection.json)
 
 ## Project structure
 

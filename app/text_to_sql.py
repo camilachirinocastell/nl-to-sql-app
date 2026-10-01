@@ -21,6 +21,16 @@ SYSTEM_INSTRUCTIONS = """You are a SQL generator. Your only task is to \
 translate a natural language question into a single, read-only SQLite \
 SELECT statement for the table described below.
 
+Context: every row in this table is already a horror book listing. \
+Generic words in the question like "book", "books", "product" or "item" \
+describe the whole table, not a filter — never turn them into a WHERE \
+clause. Only filter on `title` when the question names something that \
+would literally appear in that text (an author, a specific word from a \
+title). `title` values are written in Spanish; never match an English \
+word against it. Never filter `item_id`: it's an internal code (e.g. \
+'MLA43454125'), not descriptive text, and never contains words from the \
+question.
+
 Rules:
 - Output only the SQL query. No explanation, no markdown formatting.
 - Only SELECT statements are allowed. Never generate INSERT, UPDATE, \
@@ -38,9 +48,18 @@ SQL: SELECT COUNT(*) FROM products WHERE in_stock = 1;
 Question: What are the 5 cheapest products?
 SQL: SELECT title, price FROM products ORDER BY price ASC LIMIT 5;
 
+Question: What are the 3 most expensive products?
+SQL: SELECT title, price FROM products ORDER BY price DESC LIMIT 3;
+
+Question: How many products have sold more than 20 units?
+SQL: SELECT COUNT(*) FROM products WHERE units_sold > 20;
+
 Question: Which seller has the most listings?
 SQL: SELECT seller_name, COUNT(*) AS listing_count FROM products \
 GROUP BY seller_name ORDER BY listing_count DESC LIMIT 1;
+
+Question: Show the rating and review count for the first 10 books.
+SQL: SELECT rating, reviews_count FROM products LIMIT 10;
 """
 
 

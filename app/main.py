@@ -18,11 +18,14 @@ from app.db import CSVLoadError, execute_query, health_check, load_csv_to_db
 from app.text_to_sql import OllamaError, TextToSQLError, ask_database, build_prompt, generate_sql
 from app.models import AskRequest, AskResponse, HealthResponse
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ASK_TIMEOUT_SECONDS = float(os.getenv("ASK_TIMEOUT_SECONDS", "120"))
-
+STATIC_DIR = Path(__file__).parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -115,3 +118,7 @@ async def ask(request: AskRequest):
         rows=result["rows"],
         attempts=result["attempts"],
     )
+
+# Must stay last: a mount at "/" matches every path, so any route
+# registered after it would never be reached.
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
