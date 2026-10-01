@@ -1,0 +1,241 @@
+{
+  "info": {
+    "_postman_id": "97bbc857-96a6-48f4-8eeb-6405abd58faa",
+    "name": "NL-to-SQL App",
+    "description": "Collection to test the Natural Language to SQL app's API independently from the UI. Uses the {{base_url}} variable (defaults to http://127.0.0.1:8000, configurable in the collection's variables).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "58034286"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health - success",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Health check: confirms the service is up and the database loaded correctly. Expected response (200): {\"status\": \"ok\", \"database_connected\": true}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Internal Query (data layer, no model)",
+      "item": [
+        {
+          "name": "POST /internal/query - valid SELECT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sql\": \"SELECT title, price FROM products ORDER BY price ASC LIMIT 3\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/query",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "query"
+              ]
+            },
+            "description": "Tests the data layer in isolation, without going through the model. Useful to confirm the database and schema are fine before suspecting the model. Expected response (200): columns + rows."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /internal/query - invalid SQL (error 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sql\": \"SELECT * FROM table_that_does_not_exist\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/internal/query",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "query"
+              ]
+            },
+            "description": "This endpoint doesn't pre-validate the SQL (see Phase 4 of the build doc) — any SQLite error is returned as-is with status 400. Expected response (400): {\"detail\": \"...no such table: table_that_does_not_exist...\"}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Ask (natural language question)",
+      "item": [
+        {
+          "name": "POST /ask - 3 cheapest books (success)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"cuales son los tres libros más baratos?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ask",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ask"
+              ]
+            },
+            "description": "Success case already tested manually in Phase 4, steps 5/6. Expected response (200): sql with 'ORDER BY price ASC LIMIT 3', columns ['title','price'], 3 rows, attempts: 1."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /ask - 3 most expensive books (success)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"cuales son los tres libros más caros?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ask",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ask"
+              ]
+            },
+            "description": "Success case already tested manually in Phase 4, steps 5/6. Expected response (200): sql with 'ORDER BY price DESC LIMIT 3', columns ['title','price'], 3 rows, attempts: 1."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /ask - 422 empty body (Pydantic validation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ask",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ask"
+              ]
+            },
+            "description": "Direct request, no previous steps needed. FastAPI/Pydantic rejects the body before it reaches the handler because the 'question' field is missing. Expected response (422): detail as a LIST of objects (Pydantic's own format), different from the TextToSQLError 422 (which is a string) — see how app.js tells both apart in describeAskError, Phase 4 step 7."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /ask - 504 timeout (requires manual setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"cuales son los tres libros más baratos?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ask",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ask"
+              ]
+            },
+            "description": "⚠️ Does not trigger just by sending this request. To reproduce it: restart uvicorn with ASK_TIMEOUT_SECONDS=1 (e.g. `ASK_TIMEOUT_SECONDS=1 uvicorn app.main:app --reload`) and only then send this same request. Expected response (504): {\"detail\": \"The request took too long to process (over 1s). Try rephrasing your question.\"}. Restart uvicorn without that variable (or with the normal value) afterwards."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /ask - could not connect (requires manual setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"cuales son los tres libros más baratos?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/ask",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ask"
+              ]
+            },
+            "description": "⚠️ Does not trigger just by sending this request. To reproduce it: stop the Ollama terminal (Ctrl+C) and only then send this same request — with uvicorn up but Ollama down. MAX_RETRIES attempts get exhausted and it responds 422 (not 503; this is already noted as pending in Phase 6 of the build doc, Ollama section). Restart Ollama afterwards."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    }
+  ]
+}
