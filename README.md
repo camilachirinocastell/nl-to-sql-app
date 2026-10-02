@@ -59,7 +59,8 @@ _(Coming soon — full run instructions, including Docker.)_
 
 A Postman collection is included to test `/ask`, `/health` and
 `/internal/query` independently from the UI:
-[`postman/nl-to-sql-app.postman_collection.json`](postman/nl-to-sql-app.postman_collection.json)
+- [Postman collection](postman/nl-to-sql-app.postman_collection.json) (import into Postman)
+- [Published documentation](https://documenter.getpostman.com/view/58034286/2sBYHNWiNK) (view in browser, no Postman account needed)
 
 ## Project structure
 
