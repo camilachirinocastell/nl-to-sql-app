@@ -50,10 +50,25 @@ _(Full `docker compose up` installation instructions pending.)_
 | `CSV_PATH` | Path to the source CSV dataset |
 | `MAX_QUERY_RESULTS` | Max rows returned by any generated query |
 | `QUERY_TIMEOUT_SECONDS` | Execution timeout for generated queries |
+| `ASK_TIMEOUT_SECONDS` | Global timeout for the `/ask` endpoint, independent of the per-attempt Ollama timeout |
+| `WARMUP_MAX_RETRIES` | Max retries when warming up the model on startup (covers the initial model download) |
+| `WARMUP_BACKOFF_SECONDS` | Wait time between warm-up retries |
 
 ## Run
 
-_(Coming soon — full run instructions, including Docker.)_
+```bash
+docker compose up --build
+```
+
+This starts both services (`app` and `ollama`) and loads the dataset
+automatically. The **first time** you run this, expect it to take several
+minutes — Ollama needs to download the model (several GB) before the app
+can use it. In testing, this took close to 5 minutes on a standard
+laptop with no GPU. This is normal, not a hang; subsequent restarts are
+much faster, since the model is cached in a Docker volume.
+
+Once both services are up, the UI is available at
+`http://localhost:8000`.
 
 ## Testing the API
 

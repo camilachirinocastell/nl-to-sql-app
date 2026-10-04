@@ -27,6 +27,43 @@ logger = logging.getLogger(__name__)
 ASK_TIMEOUT_SECONDS = float(os.getenv("ASK_TIMEOUT_SECONDS", "120"))
 STATIC_DIR = Path(__file__).parent / "static"
 
+WARMUP_MAX_RETRIES = int(os.getenv("WARMUP_MAX_RETRIES", "10"))
+WARMUP_BACKOFF_SECONDS = float(os.getenv("WARMUP_BACKOFF_SECONDS", "5"))
+
+
+async def _warm_up_model():
+    """
+    Tries to warm up the model, retrying with a fixed delay between
+    attempts. This matters specifically under Docker: the `ollama`
+    service's healthcheck only confirms its server is responding — not
+    that the model has finished downloading (`ollama pull` can take
+    minutes on a slow connection). Without this, `app` could start
+    serving real questions before the model is ready, and a real
+    question's own retry loop (MAX_RETRIES in ask_database) is tuned for
+    correcting bad SQL, not for waiting out a multi-GB download — it
+    would exhaust its few quick attempts long before the pull finishes.
+    """
+    warmup_prompt = build_prompt("How many rows are in the table?")
+    for attempt in range(1, WARMUP_MAX_RETRIES + 1):
+        try:
+            await generate_sql(warmup_prompt)
+            logger.info("Startup: Ollama model warmed up (attempt %d)", attempt)
+            return
+        except OllamaError as exc:
+            logger.warning(
+                "Startup: model warm-up attempt %d/%d failed: %s",
+                attempt, WARMUP_MAX_RETRIES, exc,
+            )
+            if attempt < WARMUP_MAX_RETRIES:
+                await asyncio.sleep(WARMUP_BACKOFF_SECONDS)
+
+    logger.warning(
+        "Startup: model warm-up did not succeed after %d attempts; "
+        "will warm up on first request instead",
+        WARMUP_MAX_RETRIES,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # The CSV is loaded once, when the process starts. If it fails, it's
@@ -38,21 +75,11 @@ async def lifespan(app: FastAPI):
     except CSVLoadError as exc:
         logger.error("Startup: failed to load CSV: %s", exc)
 
-    # Warm-up: loads the model into memory before the first real
-    # question arrives, so that person doesn't pay the cold-start cost
-    # (~40s measured locally). If Ollama isn't reachable yet, log it as
-    # a warning and keep starting up anyway — the first real question
-    # will just pay the cold-start cost itself, same as before this
-    # existed.
-    try:
-        warmup_prompt = build_prompt("How many rows are in the table?")
-        await generate_sql(warmup_prompt)
-        logger.info("Startup: Ollama model warmed up")
-    except OllamaError as exc:
-        logger.warning(
-            "Startup: model warm-up failed, will warm up on first request instead: %s",
-            exc,
-        )
+    # Warm-up: loads the model into memory before the first real question
+    # arrives, so that person doesn't pay the cold-start cost (~40s
+    # measured locally). Retries with backoff instead of trying once —
+    # see _warm_up_model() for why that matters under Docker.
+    await _warm_up_model()
 
     yield
 

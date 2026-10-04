@@ -1,0 +1,11 @@
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.env
+data/*.db
+tests/
+postman/
+*.md
+.vscode/
