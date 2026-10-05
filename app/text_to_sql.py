@@ -131,7 +131,18 @@ async def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 f"{OLLAMA_HOST}/api/generate",
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    # temperature=0 makes the model deterministic: the same
+                    # question always produces the same SQL. Needed because
+                    # the default (0.8) introduced real variation between
+                    # runs (e.g. "in_stock = 1" vs "in_stock > 0" for the
+                    # same question) — undesirable for a system meant to
+                    # translate language into structured queries.
+                    "options": {"temperature": 0},
+                },
             )
             response.raise_for_status()
     except httpx.HTTPError as exc:
