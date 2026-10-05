@@ -57,6 +57,14 @@ themeToggle.addEventListener("click", () => {
 
 applyTheme(loadSavedTheme());
 
+/** Keeps the submit button disabled while the question field is empty. */
+function updateSubmitState() {
+  submitBtn.disabled = !questionInput.value.trim();
+}
+
+questionInput.addEventListener("input", updateSubmitState);
+updateSubmitState();
+
 /**
  * Shows/hides the loading indicator and disables the form while a request
  * is in flight. Also hides the previous answer's SQL, results and error
@@ -64,7 +72,7 @@ applyTheme(loadSavedTheme());
  * the "loading" state while the new question is still processing.
  */
 function setLoading(isLoading) {
-  submitBtn.disabled = isLoading;
+  submitBtn.disabled = isLoading || !questionInput.value.trim();
   questionInput.disabled = isLoading;
   statusBox.hidden = !isLoading;
   if (isLoading) {
