@@ -131,7 +131,18 @@ async def generate_sql(prompt: str, timeout: float = OLLAMA_TIMEOUT_SECONDS) -> 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 f"{OLLAMA_HOST}/api/generate",
-                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    # temperature=0 makes the model deterministic: the same
+                    # question always produces the same SQL. Needed because
+                    # the default (0.8) introduced real variation between
+                    # runs (e.g. "in_stock = 1" vs "in_stock > 0" for the
+                    # same question) — undesirable for a system meant to
+                    # translate language into structured queries.
+                    "options": {"temperature": 0},
+                },
             )
             response.raise_for_status()
     except httpx.HTTPError as exc:
@@ -212,6 +223,16 @@ class TextToSQLError(Exception):
     """Raised when no valid SQL could be produced after all retries."""
 
 
+class OllamaUnavailableError(TextToSQLError):
+    """
+    Raised instead of the generic TextToSQLError when every retry attempt
+    failed specifically because Ollama was unreachable (not because the
+    model produced invalid SQL). Lets callers (main.py) return 503
+    Service Unavailable instead of 422 for this specific case — the
+    problem isn't the question, it's that a dependency is down.
+    """
+
+
 def _build_retry_prompt(original_prompt: str, failed_sql: str, error: str) -> str:
     """Appends the failed attempt and its real error to the original prompt."""
     return (
@@ -232,6 +253,7 @@ async def ask_database(question: str) -> dict:
     """
     prompt = build_prompt(question)
     last_error = None
+    all_failures_were_ollama = True
 
     for attempt in range(1, MAX_RETRIES + 1):
         raw_sql = None
@@ -249,16 +271,20 @@ async def ask_database(question: str) -> dict:
         except SQLValidationError as exc:
             last_error = str(exc)
             failed_sql = raw_sql
+            all_failures_were_ollama = False
             logger.warning("Attempt %d failed (invalid SQL: %r): %s", attempt, raw_sql, last_error)
         except sqlite3.OperationalError as exc:
             # Real SQLite errors (e.g. "no such column") also feed the retry.
             last_error = str(exc)
             failed_sql = raw_sql
+            all_failures_were_ollama = False
             logger.warning("Attempt %d failed (execution error: %r): %s", attempt, raw_sql, last_error)
 
         if attempt < MAX_RETRIES:
             prompt = _build_retry_prompt(prompt, failed_sql, last_error)
 
-    raise TextToSQLError(
-        f"Could not produce valid SQL after {MAX_RETRIES} attempts. Last error: {last_error}"
-    )
+    error_message = f"Could not produce valid SQL after {MAX_RETRIES} attempts. Last error: {last_error}"
+    if all_failures_were_ollama:
+        raise OllamaUnavailableError(error_message)
+    raise TextToSQLError(error_message)
+    

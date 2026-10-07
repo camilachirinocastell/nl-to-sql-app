@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.db import CSVLoadError, execute_query, health_check, load_csv_to_db
-from app.text_to_sql import OllamaError, TextToSQLError, ask_database, build_prompt, generate_sql
+from app.text_to_sql import OllamaError, OllamaUnavailableError, TextToSQLError, ask_database, build_prompt, generate_sql
 from app.models import AskRequest, AskResponse, HealthResponse
 
 from pathlib import Path
@@ -126,6 +126,12 @@ async def ask(request: AskRequest):
                 f"The request took too long to process (over "
                 f"{ASK_TIMEOUT_SECONDS:.0f}s). Try rephrasing your question."
             ),
+        )
+    except OllamaUnavailableError as exc:
+        logger.error("Ollama unavailable for question '%s': %s", request.question, exc)
+        raise HTTPException(
+            status_code=503,
+            detail="The language model is currently unavailable. Please try again shortly.",
         )
     except TextToSQLError as exc:
         logger.error("Failed to produce SQL for question '%s': %s", request.question, exc)

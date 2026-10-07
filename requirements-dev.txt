@@ -1,0 +1,4 @@
+# Development-only dependencies (testing). Not installed in the Docker
+# image — see requirements.txt and the Dockerfile for the runtime set.
+-r requirements.txt
+pytest==8.3.3
