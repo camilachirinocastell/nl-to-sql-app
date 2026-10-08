@@ -26,8 +26,8 @@ database. The result is returned to the user.
 
 ## Project status
 
-🚧 In progress. See repository branches for feature-by-feature
-development history.
+✅ Complete. All 8 phases of the build finished — see the repository's
+closed pull requests for the feature-by-feature development history.
 
 ## Environment variables
 
@@ -81,6 +81,17 @@ cp .env.example .env
 This still requires Ollama running locally and reachable at the
 `OLLAMA_HOST` set in `.env` (see [Environment variables](#environment-variables)).
 
+## Running the tests
+
+With the virtual environment active:
+
+```bash
+python -m pytest tests/ -v
+```
+
+Use `python -m pytest`, not plain `pytest`: the former adds the project
+root to Python's path, so the tests can import the `app` package.
+
 ## Testing the API
 
 A Postman collection is included to test `/ask`, `/health` and
@@ -88,21 +99,58 @@ A Postman collection is included to test `/ask`, `/health` and
 - [Postman collection](postman/nl-to-sql-app.postman_collection.json) (import into Postman)
 - [Published documentation](https://documenter.getpostman.com/view/58034286/2sBYHNWiNK) (view in browser, no Postman account needed)
 
+## Dataset
+
+The data is a snapshot of 1,000 MercadoLibre Argentina listings for
+"libros de terror" (horror books), scraped with an Apify actor
+("Mercadolibre Scraper (español castellano)").
+
+- `data/data_full.csv`: the full export (1,000 rows).
+- `data/data_50.csv` (500 rows) and `data/data_10.csv` (100 rows):
+  nested random subsets, generated with a fixed seed so they can be
+  reproduced.
+- `data/data.csv`: the file the app actually loads. It is currently a
+  copy of `data_50.csv`.
+
+The CSVs keep all the columns of the original export; on startup,
+`app/db.py` keeps 16 of them in the `products` table.
+
+One caveat when reading answers: `units_sold` is only present when
+MercadoLibre displays it, so a missing value means "no data", not
+"zero sales".
+
 ## Project structure
 
 ```
 app/
-├── main.py          # FastAPI endpoints
-├── db.py             # CSV loading, connection, and query execution
-├── text_to_sql.py    # Prompt building, Ollama call, SQL validation
-├── models.py          # Pydantic request/response models
-└── static/             # Frontend (HTML/CSS/JS)
+├── main.py            # FastAPI endpoints
+├── db.py               # CSV loading, connection, and query execution
+├── text_to_sql.py       # Prompt building, Ollama call, SQL validation
+├── models.py             # Pydantic request/response models
+└── static/                 # Frontend (HTML/CSS/JS)
 data/
-└── data.csv
+├── data.csv                # Active dataset (used by the app)
+├── data_10.csv              # 10% subset, used for early testing
+├── data_50.csv                # 50% subset
+└── data_full.csv                # Full dataset
+docs/
+├── demo.gif                        # UI demo, referenced in Overview
+└── request-flow.png                # Request flow diagram (Architecture section)
+postman/
+└── nl-to-sql-app.postman_collection.json
 tests/
-└── test_sql_validation.py
+├── test_csv_loading.py     # CSV loader edge cases (empty file, missing columns)
+└── test_sql_validation.py  # SQL validator (forbidden keywords, multiple statements, etc.)
+Dockerfile
+docker-compose.yml
+requirements.txt             # Production dependencies
+requirements-dev.txt          # requirements.txt + pytest, for running the test suite
+.env.example                  # Documented env vars (copy to .env)
+.gitignore
+.dockerignore
+LICENSE                       # MIT
+README.md
 ```
-
 
 ## Architecture and trade-offs
 
@@ -110,15 +158,36 @@ tests/
 
 ```mermaid
 flowchart LR
-    User(["User"]) -->|question| UI["Browser UI<br/>(static JS)"]
-    UI -->|"POST /ask"| App["app container<br/>FastAPI"]
-    App -->|prompt + schema| Ollama["ollama container<br/>llama3.2:3b"]
-    Ollama -->|generated SQL| App
-    App -->|validated query| DB[("SQLite<br/>products")]
-    DB -->|rows| App
-    App -->|SQL + results + attempts| UI
-    UI -->|rendered answer| User
+    Browser(["Browser"])
+
+    subgraph Compose["Docker Compose network"]
+        subgraph AppC["app container (FastAPI, port 8000)"]
+            Static["Static UI<br/>HTML / CSS / JS"]
+            API["API<br/>/ask, /health"]
+            DB[("SQLite<br/>products")]
+        end
+        subgraph OllamaC["ollama container (port 11434)"]
+            Model["llama3.2:3b<br/>CPU-only"]
+        end
+        Vol[("ollama_data<br/>named volume")]
+    end
+
+    Browser -->|"GET /"| Static
+    Browser -->|"POST /ask"| API
+    API -->|"prompt + schema + few-shot<br/>temperature 0"| Model
+    Model -->|"generated SQL"| API
+    API -->|"validate_sql, then<br/>read-only query"| DB
+    API -.->|"retry up to 3x,<br/>error fed back"| Model
+    Model --- Vol
 ```
+
+_`POST /internal/query` is intentionally omitted from the diagram: it is
+a development-only endpoint for testing the data layer, not part of the
+user-facing request flow._
+
+### Request flow
+
+![Request flow](docs/request-flow.png)
 
 ### Model choice: a small general-purpose model, not a specialized one
 
