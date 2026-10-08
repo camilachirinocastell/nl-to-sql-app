@@ -56,7 +56,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      # uvicorn doesn't open its port until the startup warm-up finishes,
+      # and on a first run that waits for the model download (up to
+      # WARMUP_MAX_RETRIES x WARMUP_BACKOFF_SECONDS = 300s by default).
+      # Failures during start_period don't count as unhealthy. If you
+      # raise the warm-up values in .env, raise this too.
+      start_period: 360s
 
 volumes:
   ollama_data:
